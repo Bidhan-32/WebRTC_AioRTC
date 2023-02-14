@@ -1,11 +1,3 @@
-flutter + webrtc => python + aiortc + opencv
-============================================
-
-This demo project should help you to get setup sending a video feed from a flutter app to a python backend to allow you to then perform some image processing on the video frames using OpenCV.
-
-Running the server
-------------------
-
 First install the required packages:
 
     $ cd server
@@ -32,7 +24,6 @@ to the browser, optionally applying a transform to it.
 In parallel to media streams, the browser sends a 'ping' message over the data
 channel, and the server replies with 'pong'.
 
-![Server index page](server_index.gif)
 
 Additional options
 ------------------
@@ -63,14 +54,7 @@ Setting up flutter
 ------------------
 
 First install the required packages.
+- flutter pub get
 
-Now you will need to update the /offer path to point to your local python server.
-
-![Flutter Demo](flutter_demo.gif)
-
-Credits
--------
-
-The server files were borrowed from the aiortc github project.
-
-https://github.com/aiortc/aiortc
+Then run the app
+- flutter run
