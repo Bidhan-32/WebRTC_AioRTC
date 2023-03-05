@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 
 class P2PVideo extends StatefulWidget {
   const P2PVideo({Key? key}) : super(key: key);
+  static const String SERVER_URL = "http://localhost:8080";
 
   @override
   _P2PVideoState createState() => _P2PVideoState();
@@ -15,6 +16,7 @@ class P2PVideo extends StatefulWidget {
 class _P2PVideoState extends State<P2PVideo> {
   RTCPeerConnection? _peerConnection;
   final _localRenderer = RTCVideoRenderer();
+  final _remoteRenderer = RTCVideoRenderer();
 
   MediaStream? _localStream;
 
@@ -27,12 +29,21 @@ class _P2PVideoState extends State<P2PVideo> {
 
   bool _loading = false;
 
+  String _caption = "";
+
   void _onTrack(RTCTrackEvent event) {
     print("TRACK EVENT: ${event.streams.map((e) => e.id)}, ${event.track.id}");
     if (event.track.kind == "video") {
       print("HERE");
-      _localRenderer.srcObject = event.streams[0];
+      _remoteRenderer.srcObject = event.streams[0];
     }
+  }
+
+  void _onAddTrack(MediaStream stream) {
+    print("ADD STREAM: ${stream.id}");
+    stream
+        .getTracks()
+        .forEach((track) => {_peerConnection?.addTrack(track, stream)});
   }
 
   void _onDataChannelState(RTCDataChannelState? state) {
@@ -52,6 +63,7 @@ class _P2PVideoState extends State<P2PVideo> {
     print("WAITING FOR GATHERING COMPLETE");
     if (_peerConnection!.iceGatheringState ==
         RTCIceGatheringState.RTCIceGatheringStateComplete) {
+      print("WAITING FOR GATHERING COMPLETED");
       return true;
     } else {
       await Future.delayed(Duration(seconds: 1));
@@ -83,18 +95,19 @@ class _P2PVideoState extends State<P2PVideo> {
           var request = http.Request(
             'POST',
             Uri.parse(
-                'http://192.168.1.73:8080/offer'), // CHANGE URL HERE TO LOCAL SERVER
+                '${P2PVideo.SERVER_URL}/offer'), // CHANGE URL HERE TO LOCAL SERVER
           );
           request.body = json.encode(
             {
               "sdp": des!.sdp,
               "type": des.type,
-              "video_transform": transformType,
+              // "video_transform": transformType,
             },
           );
           request.headers.addAll(headers);
 
           http.StreamedResponse response = await request.send();
+          print("OFFER SENT");
 
           String data = "";
           print(response);
@@ -102,6 +115,7 @@ class _P2PVideoState extends State<P2PVideo> {
             data = await response.stream.bytesToString();
             var dataMap = json.decode(data);
             print(dataMap);
+            print(dataMap["type"]);
             await _peerConnection!.setRemoteDescription(
               RTCSessionDescription(
                 dataMap["sdp"],
@@ -140,6 +154,12 @@ class _P2PVideoState extends State<P2PVideo> {
     );
     _dataChannel!.onDataChannelState = _onDataChannelState;
     // _dataChannel!.onMessage = _onDataChannelMessage;
+    // RTCDataChannel _dataChannel;
+
+    _peerConnection!.onDataChannel = (channel) {
+      print("DATA CHANNEL CREATED");
+      _addDataChannel(channel);
+    };
 
     final mediaConstraints = <String, dynamic>{
       'audio': false,
@@ -161,7 +181,8 @@ class _P2PVideoState extends State<P2PVideo> {
       var stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
       // _mediaDevicesList = await navigator.mediaDevices.enumerateDevices();
       _localStream = stream;
-      // _localRenderer.srcObject = _localStream;
+      // display the local camera feed on the preview
+      _localRenderer.srcObject = _localStream;
 
       stream.getTracks().forEach((element) {
         _peerConnection!.addTrack(element, stream);
@@ -178,6 +199,20 @@ class _P2PVideoState extends State<P2PVideo> {
       _inCalling = true;
       _loading = false;
     });
+  }
+
+  void _addDataChannel(RTCDataChannel channel) {
+    _dataChannel = channel;
+    _dataChannel!.onMessage = (data) {
+      // yo message chai text box ko ma store garne
+      print("MSG: , ${data.text}");
+      setState(() {
+        _caption = data.text;
+      });
+    };
+    _dataChannel!.onDataChannelState = (state) {
+      print("Data channel state: $state");
+    };
   }
 
   Future<void> _stopCall() async {
@@ -278,32 +313,17 @@ class _P2PVideoState extends State<P2PVideo> {
                     child: Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text("Transformation: "),
-                            DropdownButton(
-                              value: transformType,
-                              onChanged: (value) {
-                                setState(() {
-                                  transformType = value.toString();
-                                });
-                              },
-                              items: ["none", "edges", "cartoon", "rotate"]
-                                  .map(
-                                    (e) => DropdownMenuItem(
-                                      value: e,
-                                      child: Text(
-                                        e,
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                            ),
-                          ],
-                        ),
+                        Row(),
                         SizedBox(
                           width: 20,
+                        ),
+                        Text(
+                          "Caption:\n \t backend",
+                          style: TextStyle(
+                            fontSize: 24,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
