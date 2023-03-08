@@ -1,5 +1,4 @@
 import os
-
 import joblib
 from keras.layers import LSTM, Dense, Input
 from keras.models import Model, load_model
@@ -8,6 +7,7 @@ from tensorflow.keras.models import Model
 
 import config
 
+#loading cnn model
 
 def model_cnn_load():
     model = VGG16(weights="imagenet", include_top=True, input_shape=(224, 224, 3))
@@ -17,7 +17,7 @@ def model_cnn_load():
 
 
 def inference_model():
-    """Returns the model that will be used for inference"""
+    """ This Returns the model that will be used for inference"""
     with open(
         os.path.join(
             config.save_model_path, "tokenizer" + str(config.num_decoder_tokens)
@@ -25,12 +25,12 @@ def inference_model():
         "rb",
     ) as file:
         tokenizer = joblib.load(file)
-    # loading encoder model. This remains the same
+    # encoder model loading. This remains the same..
     inf_encoder_model = load_model(
         os.path.join(config.save_model_path, "encoder_model.h5")
     )
 
-    # inference decoder model loading
+    # loading inference decoder model....
     decoder_inputs = Input(shape=(None, config.num_decoder_tokens))
     decoder_dense = Dense(config.num_decoder_tokens, activation="softmax")
     decoder_lstm = LSTM(config.latent_dim, return_sequences=True, return_state=True)
