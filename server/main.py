@@ -6,15 +6,14 @@ import os
 import ssl
 import uuid
 
-import cv2
-from aiohttp import web
-from av import VideoFrame
 import aiohttp_cors
-from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
-from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder, MediaRelay
-from VideoCaptionTrack import VideoCaptionTrack
+import PIL
 import settings
-import numpy as np
+from aiohttp import web
+from aiortc import RTCPeerConnection, RTCSessionDescription
+from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRelay
+
+# from VideoCaptionTrack import VideoCaptionTrack
 
 ROOT = os.path.dirname(__file__)
 
@@ -23,6 +22,7 @@ pcs = set()
 relay = MediaRelay()
 settings.init()
 
+
 async def offer(request):
     print(type(request))
     params = await request.json()
@@ -30,6 +30,15 @@ async def offer(request):
 
     pc = RTCPeerConnection()
     pc_id = "PeerConnection(%s)" % uuid.uuid4()
+    # create a data channel
+
+    channel = pc.createDataChannel("chat")
+
+    @channel.on("open")
+    def on_open():
+        print("channel opened")
+        # channel.send("Hello from backend via Datachannel")
+
     pcs.add(pc)
 
     def log_info(msg, *args):
@@ -41,13 +50,6 @@ async def offer(request):
     player = MediaPlayer(os.path.join(ROOT, "demo-instruct.wav"))
     recorder = MediaBlackhole()
 
-    @pc.on("datachannel")
-    def on_datachannel(channel):
-        @channel.on("message")
-        def on_message(message):
-            if isinstance(message, str) and message.startswith("ping"):
-                channel.send("pong" + message[4:])
-
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
         log_info("Connection state is %s", pc.connectionState)
@@ -55,20 +57,49 @@ async def offer(request):
             await pc.close()
             pcs.discard(pc)
 
+    # A  ------------------------->B
     @pc.on("track")
-    def on_track(track):
+    async def on_track(track):
         log_info("Track %s received", track.kind)
 
         if track.kind == "audio":
             pc.addTrack(player.audio)
             recorder.addTrack(track)
         elif track.kind == "video":
-            pc.addTrack(
-                VideoCaptionTrack(
-                    relay.subscribe(track)
-                    # relay.subscribe(track), transform=params["video_transform"]
-                )
-            )
+            print("track added")
+
+            # processing time
+            await track.recv()
+            print("processing done")
+            channel.send("Caption 1")
+
+            await asyncio.sleep(5)
+            channel.send("Caption 2")
+
+            # loop to continuously receive frames
+            count = 0
+            while True:
+                frame = await track.recv()
+                if frame:
+                    # do something with the frame, e.g. send it to a video sink
+                    # ...
+
+                    PIL.Image.fromarray(frame.to_ndarray(format="rgb24")).save(
+                        f"frame/frame{count}.jpg"
+                    )
+
+                    img = frame.to_ndarray(format="rgb24")
+                    print(img)
+                    count += 1
+
+                else:
+                    break
+
+            # frame = await relay.subscribe(track).recv()
+            # frame = await track.recv()
+
+            # pc.addTrack(VideoCaptionTrack(relay.subscribe(track)))
+            print("track subscribed")
 
         @track.on("ended")
         async def on_ended():
@@ -104,14 +135,17 @@ app.on_shutdown.append(on_shutdown)
 app.router.add_post("/offer", offer)
 
 for route in list(app.router.routes()):
-    cors.add(route, {
-        "*": aiohttp_cors.ResourceOptions(
-            allow_credentials=True,
-            expose_headers="*",
-            allow_headers="*",
-            allow_methods="*"
-        )
-    })
+    cors.add(
+        route,
+        {
+            "*": aiohttp_cors.ResourceOptions(
+                allow_credentials=True,
+                expose_headers="*",
+                allow_headers="*",
+                allow_methods="*",
+            )
+        },
+    )
 
 
 if __name__ == "__main__":

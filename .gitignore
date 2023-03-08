@@ -9,6 +9,11 @@
 .history
 .svn/
 
+# virtual environment
+.venv
+
+# remove temp dir
+frame
 # IntelliJ related
 *.iml
 *.ipr
